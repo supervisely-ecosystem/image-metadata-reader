@@ -3,6 +3,7 @@
 from typing import Optional
 
 import io
+import uuid
 import cv2
 import numpy as np
 import supervisely as sly
@@ -31,6 +32,10 @@ class MetadataResponse(BaseModel):
 @server.post("/get-image-metadata")
 async def get_image_metadata(req: Request):
     tm = sly.TinyTimer()
+
+    req_id = req.headers.get("x-request-uid", uuid.uuid4())
+    extra_log_meta={"requestUid": req_id}
+    sly.logger.debug("Image processing started", extra=extra_log_meta)
 
     # read the raw binary data from the request body
     binary_data = await req.body()
@@ -70,6 +75,6 @@ async def get_image_metadata(req: Request):
     except Exception as exc:
         image_meta.error = str(exc)
 
-    sly.logger.debug("Image processing done", extra={"durat_msec": tm.get_sec() * 1000.0})
+    sly.logger.debug("Image processing finished", extra={**extra_log_meta, "responseTime": round(tm.get_sec() * 1000.0)})
 
     return image_meta
