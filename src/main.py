@@ -1,14 +1,12 @@
 # coding: utf-8
 
-import base64
-import io
-import zlib
 from typing import Optional
 
+import io
 import cv2
 import numpy as np
 import supervisely as sly
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from PIL import Image
 from pydantic import BaseModel
 
@@ -30,31 +28,41 @@ class MetadataResponse(BaseModel):
     error: Optional[str] = None
 
 
-class ImageMetaReq(BaseModel):
-    image: str
-
-
 @server.post("/get-image-metadata")
-def get_image_metadata(req: ImageMetaReq):
+async def get_image_metadata(req: Request):
     tm = sly.TinyTimer()
 
+    # read the raw binary data from the request body
+    binary_data = await req.body()
+    image_data = np.frombuffer(binary_data, np.uint8)
     image_meta = MetadataResponse()
-    image_data = req.image
+
     try:
         try:
-            imencoded = zlib.decompress(base64.b64decode(image_data))
-            n = np.frombuffer(imencoded, np.uint8)
-            imdecoded = cv2.imdecode(n, cv2.IMREAD_UNCHANGED)
-        except zlib.error:
-            # If the string is not compressed, we'll not use zlib.
-            img = Image.open(io.BytesIO(base64.b64decode(image_data)))
-            imdecoded = np.array(img)
+            # convert binary data to a NumPy array
+            imdecoded = cv2.imdecode(image_data, cv2.IMREAD_UNCHANGED)
+
+            if imdecoded is not None:
+                # we can't just use IMREAD_UNCHANGED because there might be EXIF data
+                # and we want opencv to transform the image for us
+
+                channels_num = imdecoded.shape[2]
+                cv_decode_flags = None
+
+                if channels_num == 1:
+                    cv_decode_flags = cv2.IMREAD_GRAYSCALE
+                elif channels_num == 3 or channels_num == 4:
+                    cv_decode_flags = cv2.IMREAD_COLOR
+
+                if cv_decode_flags is not None:
+                    imdecoded = cv2.imdecode(image_data, cv_decode_flags)
+            else:
+                # if opencv can't read the image, try to use PIL
+                img = Image.open(io.BytesIO(image_data))
+                imdecoded = np.array(img)
+
         except Exception as e:
             raise Exception(f"Can't read image. {str(e)}")
-
-        imdecoded = cv2.cvtColor(imdecoded, cv2.COLOR_RGB2BGR)
-        if imdecoded is None:
-            raise Exception("Can't read image.")
 
         size = ImageDimensions(height=imdecoded.shape[0], width=imdecoded.shape[1])
         image_meta.data = ImageMetadata(size=size)
