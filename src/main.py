@@ -38,10 +38,7 @@ class ImageMetaReq(BaseModel):
 def get_image_metadata(req: ImageMetaReq):
     tm = sly.TinyTimer()
 
-    batch_result = []
-
     image_meta = MetadataResponse()
-
     image_data = req.image
     try:
         try:
@@ -52,9 +49,11 @@ def get_image_metadata(req: ImageMetaReq):
             # If the string is not compressed, we'll not use zlib.
             img = Image.open(io.BytesIO(base64.b64decode(image_data)))
             imdecoded = np.array(img)
+        except Exception as e:
+            raise Exception(f"Can't read image. {str(e)}")
 
         imdecoded = cv2.cvtColor(imdecoded, cv2.COLOR_RGB2BGR)
-        if imencoded is None:
+        if imdecoded is None:
             raise Exception("Can't read image.")
 
         size = ImageDimensions(height=imdecoded.shape[0], width=imdecoded.shape[1])
