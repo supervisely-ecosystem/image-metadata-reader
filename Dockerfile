@@ -1,8 +1,8 @@
-FROM supervisely/base-py-sdk:6.73.94
+FROM supervisely/base-py-sdk:6.73.564
 
 WORKDIR /app
 
-RUN pip3 install -U supervisely==6.73.128
+RUN pip3 install -U supervisely==6.73.564
 
 COPY src /app/src
 
